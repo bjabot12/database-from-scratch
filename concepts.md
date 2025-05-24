@@ -151,3 +151,28 @@ But even if the log is small, a proper indexing data structure is still needed. 
 There are 2 options: B+tree and LSM-tree.
 
 LSM-tree solves many of the challenges from the last chapter, such as how to update disk-based data structures and reuse space. While these challenges remain for B+tree, which will be explored later.
+
+## 4.1
+Fit a node into a page
+A node is split into smaller ones when it gets too big. But how do we define “too big”? For an in-memory B+tree, we can limit the number of keys in a node. But for a disk-based B+tree, the serialized node must fit into a fixed-size unit, called a page.
+
+func Encode(node *Node) []byte
+func Decode(page []byte) (*Node, error)
+Fixed-size pages make space allocation and reuse easier because all deleted nodes are interchangeable, which can be managed with a free list rather than reinventing malloc().
+
+But how do we know the serialized size? Let’s say the node is serialized via JSON, the size is only known after it is serialized, which means the node is serialized on every update just to see its size.
+
+To make the node size easily predictable, we can roll our own simpler node serialization format, like every other B+tree implementation.
+
+Design a node format
+Here is our node format. The 2nd row is the encoded field size in bytes.
+
+| type | nkeys |  pointers  |  offsets   | key-values | unused |
+|  2B  |   2B  | nkeys × 8B | nkeys × 2B |     ...    |        |
+The format starts with a 4-bytes header:
+
+type is the node type (leaf or internal).
+nkeys is the number of keys (and the number of child pointers).
+
+KV size limit
+We’ll set the node size to 4K, which is the typical OS page size. However, keys and values can be arbitrarily large, exceeding a single node. There should be a way to store large KVs outside of nodes, or to make the node size variable. This is solvable, but not fundamental. So we’ll just limit the KV size so that they always fit into a node.
